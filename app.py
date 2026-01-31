@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 from google import genai
 
@@ -5,8 +6,12 @@ from google import genai
 st.set_page_config(page_title="Gemini 2.0 Bot", page_icon="⚡")
 st.title("⚡ Gemini 2.0 Flash Chatbot")
 
-# Setup the NEW Client
-# Make sure your Streamlit Secret is still named GOOGLE_API_KEY
+# Sidebar - Clear Chat Button
+if st.sidebar.button("Clear Conversation"):
+    st.session_state.messages = []
+    st.rerun()
+
+# Setup the Client
 client = genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
 MODEL_ID = "gemini-2.0-flash"
 
@@ -25,15 +30,28 @@ if prompt := st.chat_input("Ask Gemini 2.0 anything..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Bot Response
+    # Bot Response with Retry Logic
     with st.chat_message("assistant"):
-        try:
-            # New syntax for Gemini 2.0
-            response = client.models.generate_content(
-                model=MODEL_ID, 
-                contents=prompt
-            )
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
-        except Exception as e:
-            st.error(f"Something went wrong: {e}")
+        success = False
+        retries = 3
+        for i in range(retries):
+            try:
+                # We send the whole message history so it has memory
+                response = client.models.generate_content(
+                    model=MODEL_ID, 
+                    contents=st.session_state.messages 
+                )
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                success = True
+                break 
+            except Exception as e:
+                if "429" in str(e):
+                    st.warning(f"Rate limit hit! Retrying in {i+2} seconds...")
+                    time.sleep(i + 2)
+                else:
+                    st.error(f"Error: {e}")
+                    break
+        
+        if not success:
+            st.error("I'm a bit overwhelmed. Please click 'Clear Conversation' or wait a minute.")
