@@ -32,14 +32,14 @@ st.markdown("""
         top: 0;
         background: #131314;
         z-index: 1000;
-        padding: 20px 30px;
+        padding: 10px 20px;
         border-bottom: 1px solid #333;
         display: flex;
         align-items: center;
         gap: 15px; /* Space between logo and text */
     }
     .header-logo {
-        height: 40px; /* Adjust size as needed */
+        height: 70px; /* Adjust size as needed */
         width: auto;
     }
     .header-text {
