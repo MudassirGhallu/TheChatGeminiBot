@@ -2,13 +2,14 @@ import streamlit as st
 import os
 import requests
 import time
+import base64
 from PIL import Image
 from groq import Groq
 from markitdown import MarkItDown
 
 # --- 1. ICON & PAGE SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-icon_path = os.path.join(current_dir, "1.png") # Updated to your new filename
+icon_path = os.path.join(current_dir, "1.png")
 
 try:
     bot_icon = Image.open(icon_path)
@@ -21,37 +22,45 @@ st.set_page_config(
     layout="wide"
 )
 
+# Function to convert local image to base64 for HTML injection
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
 # --- 2. GEMINI-STYLE STYLING ---
 st.markdown("""
     <style>
     .stApp { background-color: #131314; color: #e3e3e3; }
     
-    /* Header Styling with Logo on Left */
-    .header-container {
-        position: sticky;
-        top: 0;
-        background: #131314;
-        z-index: 1000;
-        padding: 10px 20px;
-        border-bottom: 1px solid #333;
+    /* Perfect Flexbox Header */
+    .custom-header {
         display: flex;
         align-items: center;
-        gap: 15px; /* Space between logo and text */
+        gap: 20px;
+        padding: 10px 0;
+        margin-bottom: 25px;
+        border-bottom: 1px solid #333;
     }
+    
     .header-logo {
-        height: 70px; /* Adjust size as needed */
-        width: auto;
+        height: 70px; /* Bigger logo */
+        width: 70px;
+        border-radius: 14px;
+        object-fit: cover;
     }
+    
     .header-text {
         color: #8ab4f8;
         font-weight: bold;
-        font-size: 32px; /* Increased Font Size */
+        font-size: 48px; /* Larger text */
+        margin: 0;
+        line-height: 1;
         font-family: 'Google Sans', Arial, sans-serif;
     }
 
     [data-testid="stSidebar"] { background-color: #1e1f20; }
     
-    /* User Message: Right Aligned */
+    /* User Message Style */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
         flex-direction: row-reverse; text-align: right; margin-left: auto;
     }
@@ -59,7 +68,7 @@ st.markdown("""
         background-color: #2b2c2f; padding: 12px 18px; border-radius: 22px; display: inline-block;
     }
     
-    /* Bot Message: Left Aligned */
+    /* Bot Message Style */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) .stMarkdown {
         background-color: transparent; padding: 10px 0;
     }
@@ -67,28 +76,22 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 3. CUSTOM HEADER INJECTION ---
-# This creates the (Logo + TheGhalluBot) layout
-header_html = f"""
-    <div class="header-container">
-        <img src="data:image/png;base64,{requests.utils.quote('')}" class="header-logo" id="bot-logo">
-        <span class="header-text">TheGhalluBot</span>
-    </div>
-"""
-# Since we can't easily pass local bytes to raw HTML src, we use a cleaner Streamlit column approach
-col1, col2 = st.columns([0.05, 0.95])
-with col1:
-    st.image(bot_icon, width=50)
-with col2:
-    st.markdown(f'<h1 style="color: #8ab4f8; margin-top: -10px;">TheGhalluBot</h1>', unsafe_allow_html=True)
-st.divider()
+try:
+    base64_img = get_base64_image(icon_path)
+    st.markdown(f"""
+        <div class="custom-header">
+            <img src="data:image/png;base64,{base64_img}" class="header-logo">
+            <h1 class="header-text">TheGhalluBot</h1>
+        </div>
+        """, unsafe_allow_html=True)
+except Exception:
+    st.markdown(f'<h1 class="header-text">🛸 TheGhalluBot</h1>', unsafe_allow_html=True)
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
     if not isinstance(bot_icon, str):
-        st.image(bot_icon, width=80)
-    else:
-        st.error("1.png not found!")
-        
+        st.image(bot_icon, width=100)
+    
     st.title("Settings")
     if st.button("➕ New Chat", use_container_width=True):
         st.session_state.messages = []
@@ -110,6 +113,7 @@ def process_universal_file(uploaded_file):
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Display History
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -128,17 +132,17 @@ if chat_input:
             for f in files: st.caption(f"📁 Attached: {f.name}")
 
     with st.chat_message("assistant"):
+        # Image Generation Logic
         image_triggers = ["draw", "generate", "make a picture", "paint", "image of"]
-        
         if any(word in prompt.lower() for word in image_triggers):
             with st.spinner("🎨 TheGhalluBot is painting..."):
                 img_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?nologo=true&model=flux"
                 st.image(img_url)
-                
                 img_bytes = requests.get(img_url).content
                 st.download_button("📥 Download Art", img_bytes, "ghallu_art.png", "image/png")
                 st.session_state.messages.append({"role": "assistant", "content": f"![Generated Image]({img_url})"})
 
+        # Text/Document Analysis Logic
         else:
             context = ""
             if files:
