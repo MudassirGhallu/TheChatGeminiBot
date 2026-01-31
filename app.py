@@ -3,89 +3,104 @@ from groq import Groq
 import requests
 import time
 
-# 1. Advanced Styling & Layout
+# 1. Gemini Layout & Styling
 st.set_page_config(page_title="TheGhalluBot", page_icon="🛸", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background: #050505; color: #e0e0e0; }
-    [data-testid="stSidebar"] { background-color: #0f0f11; border-right: 1px solid #222; }
-    .stChatInputContainer { border-top: 1px solid #333; }
-    .thought-bubble { background: #1a1a2e; border-left: 4px solid #00f2ff; padding: 12px; font-size: 0.9em; margin-bottom: 10px; }
+    /* Dark Theme Background */
+    .stApp { background-color: #131314; color: #e3e3e3; font-family: 'Google Sans', Arial, sans-serif; }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] { background-color: #1e1f20; border-right: 1px solid #333; }
+    
+    /* Message Container Logic */
+    .stChatMessage { background-color: transparent !important; border: none !important; }
+    
+    /* User Message: Right Aligned */
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+        flex-direction: row-reverse;
+        text-align: right;
+    }
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) .stMarkdown {
+        background-color: #2b2c2f;
+        padding: 10px 15px;
+        border-radius: 20px;
+        display: inline-block;
+        max-width: 80%;
+    }
+
+    /* Bot Message: Left Aligned */
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) .stMarkdown {
+        background-color: transparent;
+        padding: 10px 0;
+        max-width: 90%;
+    }
+    
+    /* Floating Chat Input */
+    .stChatInputContainer { background-color: #1e1f20 !important; border-radius: 30px !important; border: 1px solid #3c4043 !important; }
+
+    /* Sticky Header for Bot Name */
+    .bot-header { position: sticky; top: 0; background: #131314; z-index: 999; padding: 10px; border-bottom: 1px solid #333; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. Sidebar: Gemini-Style Chat History
+# 2. Header and Sidebar
+st.markdown('<div class="bot-header"><h2>🛸 TheGhalluBot</h2></div>', unsafe_allow_html=True)
+
 with st.sidebar:
-    st.title("🛸 TheGhalluBot")
-    if st.button("➕ New Conversation", use_container_width=True):
+    st.title("Ghallu History")
+    if st.button("➕ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
-    
     st.divider()
-    # Deep Research Toggle
-    think_mode = st.toggle("🧠 Deep Research Mode", value=False, help="When on, the bot logs its thinking steps.")
-    
-    st.divider()
-    st.subheader("📜 Recent Chats")
-    # Simulated History
-    history = ["Design Ideas", "Logic Puzzle", "Flux Art Gen"]
-    for chat in history:
-        st.button(f"💬 {chat}", use_container_width=True, key=f"hist_{chat}")
+    st.toggle("🧠 Deep Research Mode", key="think_mode")
 
 # 3. Setup Clients
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-POL_API_KEY = st.secrets["POLLINATIONS_API_KEY"]
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display Messages
+# 4. Display History
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 4. Integrated Input (Link icon + Text)
-# accept_file=True adds the paperclip/link icon inside the input bar
-chat_data = st.chat_input("Ask or Draw...", accept_file=True, file_type=["png", "jpg", "jpeg"])
+# 5. Gemini Chat Logic
+chat_data = st.chat_input("Ask TheGhalluBot...", accept_file=True, file_type=["png", "jpg", "jpeg"])
 
 if chat_data:
     prompt = chat_data.text
-    files = chat_data.files
-    
     st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # Display User Message
     with st.chat_message("user"):
         st.markdown(prompt)
-        if files:
-            st.image(files[0], caption="Attached Image", width=300)
 
+    # Bot Response
     with st.chat_message("assistant"):
         # Optional Thinking Log
-        if think_mode:
-            with st.status("🔍 TheGhalluBot is analyzing...", expanded=True) as status:
-                st.write("Step 1: Parsing user intent...")
-                time.sleep(0.8)
-                st.write("Step 2: Searching knowledge base...")
-                time.sleep(0.8)
-                st.write("Step 3: Generating final response.")
-                status.update(label="✅ Analysis Complete", state="complete")
+        if st.session_state.think_mode:
+            with st.status("Thinking...", expanded=False):
+                time.sleep(1)
+                st.write("Processing context...")
 
-        # ART TRIGGER
-        if any(word in prompt.lower() for word in ["draw", "generate", "image"]):
-            img_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?nologo=true&model=flux"
+        # Art or Text
+        if "draw" in prompt.lower():
+            img_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?nologo=true"
             st.image(img_url)
-            
-            # 📥 Download Button
-            img_bytes = requests.get(img_url).content
-            st.download_button(label="📥 Download Art", data=img_bytes, file_name="ghallu_bot_art.png", mime="image/png")
-            st.session_state.messages.append({"role": "assistant", "content": f"Image generated: {img_url}"})
-        
-        # CHAT TRIGGER
+            # Regenerate / Download logic
+            st.download_button("📥 Download", requests.get(img_url).content, "art.png")
         else:
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
             )
-            bot_res = completion.choices[0].message.content
-            st.markdown(bot_res)
-            st.session_state.messages.append({"role": "assistant", "content": bot_res})
+            res = completion.choices[0].message.content
+            st.markdown(res)
+            # Gemini style footer for assistant
+            col1, col2 = st.columns([1, 8])
+            with col1:
+                st.button("🔄", help="Regenerate", on_click=lambda: None) # Simple refresh placeholder
+            st.session_state.messages.append({"role": "assistant", "content": res})
