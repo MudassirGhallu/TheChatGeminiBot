@@ -58,50 +58,66 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
+# ... (Keep your Styling and Sidebar code the same) ...
+
 # 5. Integrated Input (Accepts ALL file types)
-chat_input = st.chat_input("Ask or upload anything...", accept_file="multiple")
+chat_input = st.chat_input("Ask, Draw, or Upload...", accept_file="multiple")
 
 if chat_input:
     prompt = chat_input.text
     files = chat_input.files
     
-    # Process all attached files into one context string
-    context = ""
-    if files:
-        for f in files:
-            with st.spinner(f"Reading {f.name}..."):
-                file_text = process_universal_file(f)
-                context += f"\n\n--- DOCUMENT: {f.name} ---\n{file_text}"
-
-    # Combine file content with user question
-    full_query = f"CONTEXT FROM UPLOADED FILES:\n{context}\n\nUSER QUESTION: {prompt}" if context else prompt
-
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
         if files:
-            for f in files: st.caption(f"📁 Processed: {f.name}")
+            for f in files: st.caption(f"📁 Attached: {f.name}")
 
-    # Assistant Response
     with st.chat_message("assistant"):
-        if think_mode:
-            with st.status("Performing Deep Research...", expanded=False):
-                st.write("Extracting data from files...")
-                time.sleep(1)
-                st.write("Connecting dots across documents...")
-                time.sleep(1)
-
-        # Image Generation Trigger
-        if "draw" in prompt.lower() or "generate image" in prompt.lower():
-            img_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?nologo=true"
-            st.image(img_url)
-            st.session_state.messages.append({"role": "assistant", "content": f"![Image]({img_url})"})
+        # --- THE FIX STARTS HERE ---
+        # 1. Check for IMAGE GENERATION first!
+        image_triggers = ["draw", "generate", "make a picture", "paint", "image of"]
         
-        # Standard Text/Doc Analysis
+        if any(word in prompt.lower() for word in image_triggers):
+            with st.spinner("🎨 TheGhalluBot is painting..."):
+                # Use the clean prompt for Pollinations
+                img_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?nologo=true&model=flux"
+                st.image(img_url)
+                
+                # Download Button
+                img_bytes = requests.get(img_url).content
+                st.download_button("📥 Download Art", img_bytes, "ghallu_art.png", "image/png")
+                st.session_state.messages.append({"role": "assistant", "content": f"![Generated Image]({img_url})"})
+
+        # 2. Otherwise, handle UNIVERSAL FILE READING & CHAT
         else:
+            context = ""
+            if files:
+                with st.spinner("Reading documents..."):
+                    for f in files:
+                        try:
+                            # Use MarkItDown for universal conversion
+                            file_text = process_universal_file(f)
+                            context += f"\n\n--- DOCUMENT: {f.name} ---\n{file_text}"
+                        except:
+                            st.error(f"Could not read {f.name}")
+
+            # Combine file text with prompt for Groq
+            full_query = f"CONTEXT:\n{context}\n\nUSER QUESTION: {prompt}" if context else prompt
+
+            if think_mode:
+                with st.status("Analyzing...", expanded=False):
+                    time.sleep(1)
+                    st.write("Cross-referencing files...")
+
             client = Groq(api_key=st.secrets["GROQ_API_KEY"])
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": full_query}]
+            )
+            res = completion.choices[0].message.content
+            st.markdown(res)
+            st.session_state.messages.append({"role": "assistant", "content": res})
                 messages=[{"role": "user", "content": full_query}]
             )
             res = completion.choices[0].message.content
