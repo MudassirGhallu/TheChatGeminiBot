@@ -1,4 +1,4 @@
 groq
 streamlit
 requests
-Pillow
+PyPDF2
