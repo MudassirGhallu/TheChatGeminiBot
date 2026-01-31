@@ -1,4 +1,6 @@
 groq
 streamlit
 requests
-PyPDF2
+markitdown
+pandas
+openpyxl
