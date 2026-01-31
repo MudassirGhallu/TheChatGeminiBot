@@ -5,7 +5,7 @@ import requests
 import time
 
 # 1. Gemini Layout & Styling
-st.set_page_config(page_title="TheGhalluBot", page_icon="🛸", layout="wide")
+st.set_page_config(page_title="TheGhalluBot", page_icon=Ghallu.png, layout="wide")
 
 st.markdown("""
     <style>
