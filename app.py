@@ -1,62 +1,73 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
+import base64
 from PIL import Image
+import io
 
-# 1. Custom Page Styling
-st.set_page_config(page_title="TheGhalluBot", page_icon="🔥", layout="centered")
+# 1. Page Styling (Cyberpunk Theme)
+st.set_page_config(page_title="TheGhalluBot", page_icon="⚡", layout="centered")
 
 st.markdown("""
     <style>
-    .stChatMessage { background-color: #1e1e1e; border-radius: 15px; padding: 10px; margin-bottom: 10px; }
-    .stApp { background: linear-gradient(to right, #0f0c29, #302b63, #24243e); color: white; }
-    h1 { color: #00d4ff; text-align: center; font-family: 'Courier New', Courier, monospace; }
+    .stApp { background: #0E1117; color: #00FFA3; }
+    .stChatMessage { border: 1px solid #00FFA3; border-radius: 10px; background: #161B22; }
+    h1 { text-shadow: 2px 2px #FF007A; font-family: 'Orbitron', sans-serif; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🚀 TheGhalluBot")
+st.title("⚡ TheGhalluBot ⚡")
 
-# 2. Sidebar with Features
-with st.sidebar:
-    st.header("⚙️ Bot Settings")
-    if st.button("🗑️ Clear Chat History"):
-        st.session_state.messages = []
-        st.rerun()
-    
-    st.divider()
-    st.write("📸 **Image Analysis**")
-    uploaded_file = st.file_uploader("Upload an image to ask about it!", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        st.image(uploaded_file, caption="Target Image", use_container_width=True)
-
-# 3. Setup Gemini
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash') # 1.5 Flash is best for images
+# 2. Setup Groq
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+# Use a Vision-capable model
+MODEL_NAME = "llama-3.2-11b-vision-preview" 
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 4. Display History
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Sidebar for Image Upload
+with st.sidebar:
+    st.header("📸 Vision Mode")
+    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+    if st.button("🗑️ Reset Chat"):
+        st.session_state.messages = []
+        st.rerun()
 
-# 5. Chat & Image Logic
-if prompt := st.chat_input("Message TheGhalluBot..."):
+# Display History
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# 3. Encoding Logic for Images
+def encode_image(uploaded_file):
+    return base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
+
+# 4. Chat Logic
+if prompt := st.chat_input("Ask TheGhalluBot..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
-            if uploaded_file:
-                # If there is an image, send it with the text
-                img = Image.open(uploaded_file)
-                response = model.generate_content([prompt, img])
-            else:
-                # Normal text chat
-                response = model.generate_content(prompt)
+            # Prepare content list for Groq's multimodal API
+            content = [{"type": "text", "text": prompt}]
             
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            if uploaded_file:
+                base64_image = encode_image(uploaded_file)
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                })
+
+            completion = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[{"role": "user", "content": content}],
+            )
+            
+            response_text = completion.choices[0].message.content
+            st.markdown(response_text)
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
+            
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Groq Error: {e}")
