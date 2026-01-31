@@ -1,18 +1,20 @@
-import time
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 
-st.set_page_config(page_title="Gemini 2.0 Bot", page_icon="⚡")
-st.title("⚡ Gemini 2.0 Flash Chatbot")
+# Page Config
+st.set_page_config(page_title="Gemini 1.5 Bot", page_icon="🤖")
+st.title("🤖 Gemini 1.5 Flash Bot")
 
-if st.sidebar.button("Clear Conversation"):
+# Sidebar to reset everything
+if st.sidebar.button("Reset Bot & Clear History"):
     st.session_state.messages = []
     st.rerun()
 
-client = genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
-MODEL_ID = "gemini-2.0-flash"
+# Setup 1.5 Flash
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+model = genai.GenerativeModel('gemini-1.5-flash')
 
+# Initialize history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -21,33 +23,17 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask Gemini 2.0 anything..."):
-    # 1. Show user message
+# User Input
+if prompt := st.chat_input("Say something..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Generate response
     with st.chat_message("assistant"):
         try:
-            # We convert our list into the format the NEW SDK expects
-            history_for_api = []
-            for m in st.session_state.messages:
-                history_for_api.append(
-                    types.Content(role=m["role"], parts=[types.Part(text=m["content"])])
-                )
-
-            response = client.models.generate_content(
-                model=MODEL_ID,
-                contents=history_for_api
-            )
-            
-            bot_text = response.text
-            st.markdown(bot_text)
-            st.session_state.messages.append({"role": "model", "content": bot_text})
-            
+            # Simple and easy syntax for 1.5
+            response = model.generate_content(prompt)
+            st.markdown(response.text)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
-            if "429" in str(e):
-                st.error("Rate limit hit. Please wait 60 seconds and try again.")
-            else:
-                st.error(f"Error: {e}")
+            st.error(f"Error: {e}")
