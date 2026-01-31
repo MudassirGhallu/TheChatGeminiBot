@@ -1,11 +1,10 @@
 import streamlit as st
 from groq import Groq
+from markitdown import MarkItDown
 import requests
 import time
-import PyPDF2
-import io
 
-# 1. Gemini Layout Styling
+# 1. Gemini Layout & Styling
 st.set_page_config(page_title="TheGhalluBot", page_icon="🛸", layout="wide")
 
 st.markdown("""
@@ -18,7 +17,7 @@ st.markdown("""
     }
     [data-testid="stSidebar"] { background-color: #1e1f20; }
     
-    /* Right-aligned User Messages */
+    /* User: Right / Bot: Left */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
         flex-direction: row-reverse; text-align: right; margin-left: auto;
     }
@@ -28,9 +27,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<div class="bot-header">TheGhalluBot</div>', unsafe_allow_html=True)
+st.markdown('<div class="bot-header">TheGhalluBot Universal</div>', unsafe_allow_html=True)
 
-# 2. Sidebar (History removed, Settings kept)
+# 2. Sidebar Settings
 with st.sidebar:
     st.title("Settings")
     if st.button("➕ New Chat", use_container_width=True):
@@ -38,16 +37,18 @@ with st.sidebar:
         st.rerun()
     st.divider()
     think_mode = st.toggle("🧠 Deep Research Mode", value=False)
-    st.info("Upload any PDF or Text file using the '+' icon in the chat bar!")
+    st.caption("Supports: PDF, DOCX, PPTX, XLSX, TXT, & Images")
 
-# 3. Helper: Extract Text from Files
-def extract_text(uploaded_file):
-    if uploaded_file.type == "application/pdf":
-        reader = PyPDF2.PdfReader(uploaded_file)
-        return " ".join([page.extract_text() for page in reader.pages])
-    elif uploaded_file.type == "text/plain":
-        return str(uploaded_file.read(), "utf-8")
-    return ""
+# 3. Universal File Processor
+md_converter = MarkItDown()
+
+def process_universal_file(uploaded_file):
+    try:
+        # MarkItDown handles the bytes directly and detects the format
+        result = md_converter.convert(uploaded_file)
+        return result.text_content
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
 
 # 4. Chat Initialization
 if "messages" not in st.session_state:
@@ -57,46 +58,51 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 5. The Magic Input (Link icon for PDFs, Images, and Txt)
-chat_input = st.chat_input("Ask or upload a document...", accept_file="multiple")
+# 5. Integrated Input (Accepts ALL file types)
+chat_input = st.chat_input("Ask or upload anything...", accept_file="multiple")
 
 if chat_input:
     prompt = chat_input.text
     files = chat_input.files
     
-    # Process files if attached
+    # Process all attached files into one context string
     context = ""
     if files:
         for f in files:
-            content = extract_text(f)
-            if content:
-                context += f"\n--- Content from {f.name} ---\n{content}\n"
-    
-    full_prompt = f"{context}\n\nUser Question: {prompt}" if context else prompt
+            with st.spinner(f"Reading {f.name}..."):
+                file_text = process_universal_file(f)
+                context += f"\n\n--- DOCUMENT: {f.name} ---\n{file_text}"
+
+    # Combine file content with user question
+    full_query = f"CONTEXT FROM UPLOADED FILES:\n{context}\n\nUSER QUESTION: {prompt}" if context else prompt
 
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
         if files:
-            for f in files: st.caption(f"📎 Attached: {f.name}")
+            for f in files: st.caption(f"📁 Processed: {f.name}")
 
+    # Assistant Response
     with st.chat_message("assistant"):
         if think_mode:
-            with st.status("Analyzing document data...", expanded=False):
+            with st.status("Performing Deep Research...", expanded=False):
+                st.write("Extracting data from files...")
                 time.sleep(1)
-                st.write("Extracting text...")
+                st.write("Connecting dots across documents...")
                 time.sleep(1)
 
-        # Logic for Image Gen vs Text
-        if "draw" in prompt.lower():
+        # Image Generation Trigger
+        if "draw" in prompt.lower() or "generate image" in prompt.lower():
             img_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?nologo=true"
             st.image(img_url)
             st.session_state.messages.append({"role": "assistant", "content": f"![Image]({img_url})"})
+        
+        # Standard Text/Doc Analysis
         else:
             client = Groq(api_key=st.secrets["GROQ_API_KEY"])
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": full_prompt}]
+                messages=[{"role": "user", "content": full_query}]
             )
             res = completion.choices[0].message.content
             st.markdown(res)
