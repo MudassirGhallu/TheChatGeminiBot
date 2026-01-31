@@ -9,7 +9,7 @@ from markitdown import MarkItDown
 # --- 1. ICON & PAGE SETUP ---
 # This looks for the image in the same folder as your app.py
 current_dir = os.path.dirname(os.path.abspath(__file__))
-icon_path = os.path.join(current_dir, "Ghallu.png")
+icon_path = os.path.join(current_dir, "1.png")
 
 try:
     bot_icon = Image.open(icon_path)
@@ -49,7 +49,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<div class="bot-header">TheGhalluBot Universal</div>', unsafe_allow_html=True)
+st.markdown('<div class="bot-header">TheGhalluBot</div>', unsafe_allow_html=True)
 
 # --- 3. SIDEBAR ---
 with st.sidebar:
@@ -57,7 +57,7 @@ with st.sidebar:
     if not isinstance(bot_icon, str):
         st.image(bot_icon, width=100)
     else:
-        st.error("Ghallu.png not found in root directory!")
+        st.error("1.png not found in root directory!")
         
     st.title("Settings")
     if st.button("➕ New Chat", use_container_width=True):
@@ -108,7 +108,7 @@ if chat_input:
                 st.image(img_url)
                 
                 img_bytes = requests.get(img_url).content
-                st.download_button("📥 Download Art", img_bytes, "ghallu_art.png", "image/png")
+                st.download_button("📥 Download Art", img_bytes, "Generated_by_Ghallu.png", "image/png")
                 st.session_state.messages.append({"role": "assistant", "content": f"![Generated Image]({img_url})"})
 
         # PRIORITY 2: Document/Text Analysis
